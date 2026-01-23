@@ -169,7 +169,7 @@ function App() {
                                 )}
 
                                 {activeTab === 'technical' && (
-                                    <TechnicalAnalysis data={data.analysis?.technical} />
+                                    <TechnicalAnalysis data={data.analysis?.technical} period={period} chartData={data.chart_data} />
                                 )}
 
                                 {activeTab === 'stats' && (
