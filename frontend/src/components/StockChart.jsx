@@ -16,10 +16,37 @@ const StockChart = ({ data, period, onPeriodChange }) => {
     // Removed Volume Bar, Upper_Band, Lower_Band
     // Added Period Selectors
 
-    const periods = ['1mo', '3mo', '6mo', '1y', '5y', 'max'];
+    const periods = ['3mo', '6mo', '1y', '5y', 'max'];
     const periodLabels = {
-        '1mo': '1M', '3mo': '3M', '6mo': '6M', '1y': '1Y', '5y': '5Y', 'max': 'MAX'
+        '3mo': '3M', '6mo': '6M', '1y': '1Y', '5y': '5Y', 'max': 'MAX'
     };
+
+    // OPTIMIZATION: Downsample data for large datasets
+    const optimizeDataForChart = (rawData, currentPeriod) => {
+        if (!rawData || rawData.length === 0) return [];
+
+        // No sampling for short periods
+        if (['3mo'].includes(currentPeriod)) return rawData;
+
+        const maxPoints = 500;
+        if (rawData.length <= maxPoints) return rawData;
+
+        const step = Math.ceil(rawData.length / maxPoints);
+        return rawData.filter((_, index) => index % step === 0);
+    };
+
+    const [chartData, setChartData] = useState([]);
+    const [isChartLoading, setIsChartLoading] = useState(false);
+
+    React.useEffect(() => {
+        setIsChartLoading(true);
+        // Simulate a small delay or just process
+        const timer = setTimeout(() => {
+            setChartData(optimizeDataForChart(data, period));
+            setIsChartLoading(false);
+        }, 50); // Small processing delay to allow UI to show loading if needed
+        return () => clearTimeout(timer);
+    }, [data, period]);
 
     const CustomTooltip = ({ active, payload, label }) => {
         if (active && payload && payload.length) {
@@ -60,59 +87,67 @@ const StockChart = ({ data, period, onPeriodChange }) => {
             </div>
 
             <div className="flex-1 w-full min-h-0">
-                <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-                        <defs>
-                            <linearGradient id="colorClose" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#8884d8" stopOpacity={0.3} />
-                                <stop offset="95%" stopColor="#8884d8" stopOpacity={0} />
-                            </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
-                        <XAxis
-                            dataKey="Date"
-                            tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
-                            minTickGap={30}
-                        />
-                        <YAxis
-                            yAxisId="left"
-                            domain={['auto', 'auto']}
-                            orientation="right"
-                            tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
-                        />
+                {isChartLoading ? (
+                    <div className="flex items-center justify-center h-full">
+                        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                    </div>
+                ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                            <defs>
+                                <linearGradient id="colorClose" x1="0" y1="0" x2="0" y2="1">
+                                    <stop offset="5%" stopColor="#8884d8" stopOpacity={0.3} />
+                                    <stop offset="95%" stopColor="#8884d8" stopOpacity={0} />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                            <XAxis
+                                dataKey="Date"
+                                tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                                minTickGap={30}
+                            />
+                            <YAxis
+                                yAxisId="left"
+                                domain={['auto', 'auto']}
+                                orientation="right"
+                                tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                            />
 
-                        <Tooltip content={<CustomTooltip />} />
-                        <Legend />
+                            <Tooltip content={<CustomTooltip />} />
+                            <Legend />
 
-                        <Area
-                            yAxisId="left"
-                            type="monotone"
-                            dataKey="Close"
-                            stroke="#8884d8"
-                            fillOpacity={1}
-                            fill="url(#colorClose)"
-                            name="Price"
-                        />
+                            <Area
+                                yAxisId="left"
+                                type="monotone"
+                                dataKey="Close"
+                                stroke="#8884d8"
+                                fillOpacity={1}
+                                fill="url(#colorClose)"
+                                name="Price"
+                            />
 
-                        <Line
-                            yAxisId="left"
-                            type="monotone"
-                            dataKey="SMA_20"
-                            stroke="#ff7300"
-                            dot={false}
-                            strokeWidth={1.5}
-                            name="SMA 20"
-                        />
+                            <Line
+                                yAxisId="left"
+                                type="monotone"
+                                dataKey="SMA_20"
+                                stroke="#ff7300"
+                                dot={false}
+                                strokeWidth={1.5}
+                                connectNulls={true}
+                                name="SMA 20"
+                            />
 
-                        {/* 
+                            {/* 
                             Removed Volume Bar, UpperBB, LowerBB as requested 
                             This significantly improves render performance by reducing SVG nodes.
                         */}
 
-                    </ComposedChart>
-                </ResponsiveContainer>
+                        </ComposedChart>
+                    </ResponsiveContainer>
+                )}
             </div>
         </div>
+
     );
 };
 

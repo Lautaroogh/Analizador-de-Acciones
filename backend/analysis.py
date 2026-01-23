@@ -14,6 +14,22 @@ def calculate_advanced_indicators(data):
     # Copy data to avoid modifying original
     df = data.copy()
 
+    # Safeguard against insufficient data
+    if len(df) < 20:
+        # Return basic indicators or empty structure to prevent crash
+        latest = df.iloc[-1]
+        return df, {
+            "RSI": None,
+            "MACD": {"macd": None, "signal": None, "hist": None},
+            "Stoch": {"k": None, "d": None},
+            "BB": {"high": None, "low": None, "mid": None, "price": latest['Close']},
+            "ADX": None,
+            "ATR": None,
+            "CCI": None,
+            "Williams": None,
+            "OBV": None
+        }
+
     # RSI (Relative Strength Index)
     df['RSI'] = ta.momentum.RSIIndicator(close=df['Close'], window=14).rsi()
 

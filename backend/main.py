@@ -73,12 +73,11 @@ def get_ticker_data(symbol: str, period: str = "max", interval: str = "1d"):
         info = ticker.info
         summary_en = info.get('longBusinessSummary') or info.get('description') or "No summary available."
         
-        # try:
-        #     summary_es = GoogleTranslator(source='auto', target='es').translate(summary_en)
-        # except Exception as e:
-        #     print(f"Translation failed: {e}")
-        #     summary_es = summary_en # Fallback
-        summary_es = summary_en # Direct fallback to avoid hanging
+        try:
+            summary_es = GoogleTranslator(source='auto', target='es').translate(summary_en)
+        except Exception as e:
+            print(f"Translation failed: {e}")
+            summary_es = summary_en # Fallback
 
         info['longBusinessSummary_es'] = summary_es
         
