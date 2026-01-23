@@ -5,13 +5,13 @@ const Statistics = ({ data }) => {
     if (!data) return <div className="p-8 text-center text-muted-foreground">Cargando estadística...</div>;
 
     // De-structure from backend response
-    const { seasonality, distribution, drawdowns, risk } = data; // 'risk' might need check if provided by backend in V3
+    const { seasonality, distribution, drawdowns } = data;
 
     // Prepare Heatmap Data
-    // Backend returns { index: [years], columns: [months], data: [[val, val...]] }
     const years = seasonality.monthly_heatmap.index;
     const heatmapData = seasonality.monthly_heatmap.data;
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthsShort = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const monthsFull = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
     const getHeatmapColor = (val) => {
         if (val === 0) return 'bg-gray-800';
@@ -19,19 +19,22 @@ const Statistics = ({ data }) => {
         else return `rgba(239, 68, 68, ${Math.min(Math.abs(val) * 8, 1)})`; // Red
     };
 
-    // Prepare Charts
+    // Prepare Charts with Full Names for Tooltips
     const monthlyChartData = Object.entries(seasonality.avg_monthly).map(([m, val]) => ({
-        name: months[parseInt(m) - 1],
+        name: monthsShort[parseInt(m) - 1],
+        fullName: monthsFull[parseInt(m) - 1], // Added for tooltip
         value: val * 100
     }));
 
-    const days = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+    const daysShort = ["Mon", "Tue", "Wed", "Thu", "Fri"];
+    const daysFull = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes"];
+
     // Backend avg_daily keys might be 0-6. Let's assume 0=Mon for now or check backend.
-    // Backend analysis.py: df.index.dayofweek -> 0=Mon, 6=Sun.
     const dailyChartData = Object.entries(seasonality.avg_daily)
         .filter(([d]) => d < 5) // Exclude Sat/Sun if present
         .map(([d, val]) => ({
-            name: days[parseInt(d)],
+            name: daysShort[parseInt(d)],
+            fullName: daysFull[parseInt(d)], // Added for tooltip
             value: val // Already percent from backend
         }));
 
@@ -40,8 +43,24 @@ const Statistics = ({ data }) => {
         count: count
     }));
 
-    // In V3, Risk metrics might have been less extensive or just what's in drawdowns?
-    // Let's render what we have from analysis.py
+    // Detailed Tooltip Component
+    const CustomBarTooltip = ({ active, payload }) => {
+        if (active && payload && payload.length) {
+            const data = payload[0].payload;
+            const value = data.value;
+            const label = data.fullName || data.name; // Use Full Name if available
+            const color = value >= 0 ? '#4ade80' : '#f87171'; // Green or Red
+
+            return (
+                <div className="bg-popover border border-border p-2 rounded shadow-md">
+                    <p style={{ color }} className="font-semibold">
+                        {label}: {value >= 0 ? '+' : ''}{value.toFixed(2)}%
+                    </p>
+                </div>
+            );
+        }
+        return null;
+    };
 
     return (
         <div className="space-y-6">
@@ -54,7 +73,7 @@ const Statistics = ({ data }) => {
                         <thead>
                             <tr>
                                 <th className="p-2 text-left">Year</th>
-                                {months.map(m => <th key={m} className="p-2">{m}</th>)}
+                                {monthsShort.map(m => <th key={m} className="p-2">{m}</th>)}
                             </tr>
                         </thead>
                         <tbody>
@@ -86,7 +105,7 @@ const Statistics = ({ data }) => {
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted))" />
                             <XAxis dataKey="name" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
                             <YAxis tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-                            <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))' }} />
+                            <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'hsl(var(--muted)/0.2)' }} />
                             <Bar dataKey="value" name="Return %">
                                 {monthlyChartData.map((entry, index) => (
                                     <Cell key={`cell-${index}`} fill={entry.value >= 0 ? '#4ade80' : '#f87171'} />
@@ -103,7 +122,7 @@ const Statistics = ({ data }) => {
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted))" />
                             <XAxis dataKey="name" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
                             <YAxis tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-                            <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))' }} />
+                            <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'hsl(var(--muted)/0.2)' }} />
                             <Bar dataKey="value" name="Return %">
                                 {dailyChartData.map((entry, index) => (
                                     <Cell key={`cell-${index}`} fill={entry.value >= 0 ? '#4ade80' : '#f87171'} />
@@ -132,11 +151,11 @@ const Statistics = ({ data }) => {
                     <div className="space-y-4">
                         <div className="flex justify-between border-b border-border pb-2">
                             <span className="text-muted-foreground">Max Drawdown</span>
+                            {/* Priority 2/4: Max Drawdown in RED */}
                             <span className="font-bold text-red-500">{(drawdowns.max_drawdown * 100).toFixed(2)}%</span>
                         </div>
                         <div className="flex justify-between border-b border-border pb-2">
                             <span className="text-muted-foreground">Avg Drawdown</span>
-                            {/* In V3 backend might not have avg_drawdown, relying on what we have */}
                             <span className="font-bold text-red-500 text-xs">N/A (Update to V4 for Avg)</span>
                         </div>
                         <div className="flex justify-between border-b border-border pb-2">

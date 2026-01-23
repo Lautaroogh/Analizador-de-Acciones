@@ -13,6 +13,7 @@ function App() {
     const [symbol, setSymbol] = useState('SPY');
     const [data, setData] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
     const [period, setPeriod] = useState('max'); // Load full history by default
     const [activeTab, setActiveTab] = useState('chart');
 
@@ -22,6 +23,7 @@ function App() {
 
     const fetchData = async (sym, per) => {
         setLoading(true);
+        setError(null);
         try {
             // Backend handles 'max' for detailed stats internally if needed, 
             // but for chart optimization, we respect the period.
@@ -36,6 +38,7 @@ function App() {
             setData(result);
         } catch (error) {
             console.error("Error fetching data:", error);
+            setError("Failed to load data. Please check if the backend is running. (Error: " + (error.response?.data?.detail || error.message) + ")");
         } finally {
             setLoading(false);
         }
@@ -85,6 +88,12 @@ function App() {
                         </div>
                     </div>
                 </div>
+
+                {error && (
+                    <div className="bg-red-500/10 border border-red-500/50 text-red-500 p-4 rounded-lg mb-6 text-center">
+                        {error}
+                    </div>
+                )}
 
                 {loading ? (
                     <div className="flex items-center justify-center h-64">

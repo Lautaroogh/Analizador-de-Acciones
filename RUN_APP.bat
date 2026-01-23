@@ -7,7 +7,7 @@ echo ==================================================
 
 echo.
 echo [1/2] Starting Backend Server (FastAPI)...
-start "FinAnalyzer Backend" /D "backend" cmd /k "if exist venv\Scripts\activate.bat (call venv\Scripts\activate.bat) else (echo Venv not found) && python -m uvicorn main:app --reload --port 8000"
+start "FinAnalyzer Backend" /D "backend" cmd /k "if not exist venv\Scripts\activate.bat (echo Error: Virtual environment not found in backend/venv & pause & exit) else (call venv\Scripts\activate.bat && python -m uvicorn main:app --reload --port 8000)"
 
 echo [2/2] Starting Frontend (React/Vite)...
 start "FinAnalyzer Frontend" /D "frontend" cmd /k "set PATH=C:\Program Files\nodejs;%PATH% && npm run dev"

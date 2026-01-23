@@ -1,19 +1,29 @@
 import React from 'react';
 
-const StatsGrid = ({ stats }) => {
+const StatsGrid = ({ stats, period = "MAX" }) => {
     if (!stats) return null;
+
+    // Helper to format period label
+    const formatPeriod = (p) => {
+        if (!p) return "MAX";
+        return p.toUpperCase();
+    }
 
     const metrics = [
         { label: "Current Price", value: stats.current_price?.toFixed(2), unit: "$" },
-        { label: "Total Return", value: stats.total_return_pct?.toFixed(2), unit: "%", color: true },
+        { label: `Total Return (${formatPeriod(period)})`, value: stats.total_return_pct?.toFixed(2), unit: "%", color: true },
         { label: "Volatility (Ann.)", value: stats.annualized_volatility_pct?.toFixed(2), unit: "%" },
         { label: "Sharpe Ratio", value: stats.sharpe_ratio?.toFixed(2), unit: "" },
-        { label: "Max Drawdown", value: stats.max_drawdown_pct?.toFixed(2), unit: "%", inverseColor: true },
+        { label: "Max Drawdown", value: stats.max_drawdown_pct?.toFixed(2), unit: "%", isNegative: true },
     ];
 
-    const getColor = (value, inverse = false) => {
+    const getColor = (value, inverse = false, isNegative = false) => {
         const num = parseFloat(value);
         if (isNaN(num)) return "text-foreground";
+
+        // Priority 4: Max Drawdown always red (negative implication)
+        if (isNegative) return "text-red-400";
+
         if (num > 0) return inverse ? "text-red-500" : "text-green-500";
         if (num < 0) return inverse ? "text-green-500" : "text-red-500";
         return "text-foreground";
@@ -24,7 +34,7 @@ const StatsGrid = ({ stats }) => {
             {metrics.map((metric, index) => (
                 <div key={index} className="bg-card border border-border p-4 rounded-lg">
                     <div className="text-sm text-muted-foreground mb-1">{metric.label}</div>
-                    <div className={`text-2xl font-bold ${metric.color || metric.inverseColor ? getColor(metric.value, metric.inverseColor) : ''}`}>
+                    <div className={`text-2xl font-bold ${metric.isNegative ? 'text-red-400' : (metric.color || metric.inverseColor ? getColor(metric.value, metric.inverseColor) : '')}`}>
                         {metric.value}{metric.unit}
                     </div>
                 </div>

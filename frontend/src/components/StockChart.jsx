@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
     ComposedChart,
     Line,
-    Bar,
     XAxis,
     YAxis,
     CartesianGrid,
@@ -12,11 +11,15 @@ import {
     Legend
 } from 'recharts';
 
-const StockChart = ({ data }) => {
-    const [chartType, setChartType] = useState('line'); // 'line' or 'candle' (candle requires more complex custom shape in Recharts, sticking to composed for now)
+const StockChart = ({ data, period, onPeriodChange }) => {
+    // Priority 1 & 5
+    // Removed Volume Bar, Upper_Band, Lower_Band
+    // Added Period Selectors
 
-    // Format data for Recharts
-    // data matches backend: { Date, Open, High, Low, Close, Volume, SMA_20, ... }
+    const periods = ['1mo', '3mo', '6mo', '1y', '5y', 'max'];
+    const periodLabels = {
+        '1mo': '1M', '3mo': '3M', '6mo': '6M', '1y': '1Y', '5y': '5Y', 'max': 'MAX'
+    };
 
     const CustomTooltip = ({ active, payload, label }) => {
         if (active && payload && payload.length) {
@@ -38,8 +41,21 @@ const StockChart = ({ data }) => {
         <div className="bg-card border border-border rounded-lg p-4 h-[500px] flex flex-col">
             <div className="flex justify-between items-center mb-4">
                 <h3 className="text-lg font-semibold">Price History & Indicators</h3>
-                <div className="flex gap-2">
-                    {/* Chart controls could go here */}
+
+                {/* Time Range Selectors */}
+                <div className="flex gap-1 bg-secondary/30 p-1 rounded-md">
+                    {periods.map((p) => (
+                        <button
+                            key={p}
+                            onClick={() => onPeriodChange && onPeriodChange(p)}
+                            className={`px-2 py-1 text-xs font-medium rounded transition-all ${period === p
+                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-white/10'
+                                }`}
+                        >
+                            {periodLabels[p]}
+                        </button>
+                    ))}
                 </div>
             </div>
 
@@ -64,13 +80,7 @@ const StockChart = ({ data }) => {
                             orientation="right"
                             tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
                         />
-                        <YAxis
-                            yAxisId="right"
-                            orientation="left"
-                            tick={false}
-                            axisLine={false}
-                            width={0}
-                        />
+
                         <Tooltip content={<CustomTooltip />} />
                         <Legend />
 
@@ -93,34 +103,12 @@ const StockChart = ({ data }) => {
                             strokeWidth={1.5}
                             name="SMA 20"
                         />
-                        <Line
-                            yAxisId="left"
-                            type="monotone"
-                            dataKey="Upper_Band"
-                            stroke="#82ca9d"
-                            strokeDasharray="5 5"
-                            dot={false}
-                            strokeWidth={1}
-                            name="Upper BB"
-                        />
-                        <Line
-                            yAxisId="left"
-                            type="monotone"
-                            dataKey="Lower_Band"
-                            stroke="#82ca9d"
-                            strokeDasharray="5 5"
-                            dot={false}
-                            strokeWidth={1}
-                            name="Lower BB"
-                        />
 
-                        <Bar
-                            yAxisId="right"
-                            dataKey="Volume"
-                            fill="hsl(var(--muted))"
-                            opacity={0.3}
-                            name="Volume"
-                        />
+                        {/* 
+                            Removed Volume Bar, UpperBB, LowerBB as requested 
+                            This significantly improves render performance by reducing SVG nodes.
+                        */}
+
                     </ComposedChart>
                 </ResponsiveContainer>
             </div>
