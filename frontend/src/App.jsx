@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import SearchBox from './components/SearchBox';
 import StockChart from './components/StockChart';
 import StatsGrid from './components/StatsGrid';
@@ -6,76 +6,111 @@ import Tabs from './components/Tabs';
 import TechnicalAnalysis from './components/TechnicalAnalysis';
 import Statistics from './components/Statistics';
 import Ratios from './components/Ratios';
+import StatsRangeSelector from './components/StatsRangeSelector';
 import { getTickerData } from './api';
 import { LayoutDashboard, TrendingUp, Activity } from 'lucide-react';
+import {
+    calculateTotalReturn,
+    calculateVolatility,
+    calculateSharpeRatio,
+    calculateMaxDrawdown
+} from './utils/finance';
+import {
+    calculateMonthlyReturnsHeatmap,
+    calculateAvgMonthlyPerformance,
+    calculateAvgDailyPerformance,
+    calculateDistributionOfReturns,
+    calculateDrawdownAnalysis
+} from './utils/statistics';
 
 function App() {
     const [symbol, setSymbol] = useState('SPY');
-    const [data, setData] = useState(null);
+    const [historicalData, setHistoricalData] = useState([]); // Raw MAX data
+    const [backendData, setBackendData] = useState(null); // Full backend response for access to .info, etc
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    const [period, setPeriod] = useState('1y'); // Default to 1 Year as requested
+    // --- STATES ---
     const [activeTab, setActiveTab] = useState('chart');
     const [translatedSummary, setTranslatedSummary] = useState('');
 
-    // Translation helper
-    const translateToSpanish = async (text) => {
-        if (!text) return '';
-        // Mocking the translation or using a simple fallback if no API key is present
-        // In a real scenario, this would call the proxy or a backend endpoint to hide the key.
-        // For this task, we'll try to use the logic provided but fail gracefully to original.
-        try {
-            // Note: Calling Anthropic directly from frontend usually exposes keys. 
-            // Since I don't have the user's key here, I will use a placeholder or check if the backend handles it.
-            // valid way as per request:
-            /*
-            const response = await fetch('https://api.anthropic.com/v1/messages', ...);
-            */
-            // For safety and robustness without a key, we will simulate or just use the backend fallback if available.
-            // However, the user specifically asked for THIS code. I will include the function structure
-            // but warn that it might need a key. To avoid breaking, I'll return the text if it fails.
-            return text;
-        } catch (e) {
-            console.error("Translation error", e);
-            return text;
-        }
-    };
+    // 1. Chart Period State
+    const [chartPeriod, setChartPeriod] = useState('1y');
 
+    // 2. Stats Date Range State - Ensure safe initialization
+    const [statsDateRange, setStatsDateRange] = useState(() => {
+        const now = new Date();
+        return {
+            startMonth: 0,
+            startYear: now.getFullYear() - 5,
+            endMonth: now.getMonth(),
+            endYear: now.getFullYear()
+        };
+    });
+
+    const [isLoadingStats, setIsLoadingStats] = useState(false);
+
+    // --- COMPUTED STATES ---
+    const [topMetrics, setTopMetrics] = useState({});
+    const [statistics, setStatistics] = useState(null);
+    const [technicalIndicators, setTechnicalIndicators] = useState(null);
+
+    // DEBUG: Global State Check
     useEffect(() => {
-        if (data?.info?.longBusinessSummary) {
-            // If backend already provides summary_es, use it. 
-            // Currently backend tries to translate using deep_translator.
-            // We'll prefer backend result if available, else original.
-            // The user request wanted specifically a frontend translation function using Claude,
-            // but without an API key it won't work. I'll stick to displaying what the backend sends,
-            // which already attempts translation.
-            setTranslatedSummary(data.info.longBusinessSummary_es || data.info.longBusinessSummary);
-        }
-    }, [data]);
+        console.log('========================================');
+        console.log('DEBUGGING COMPLETO - ESTADO DE LA APP');
+        console.log('========================================');
+        console.log('1. historicalData:', {
+            existe: !!historicalData,
+            length: historicalData?.length,
+            primer_dato: historicalData?.[0],
+            ultimo_dato: historicalData?.[historicalData.length - 1]
+        });
+        console.log('2. chartPeriod:', chartPeriod);
+        console.log('3. statsDateRange:', statsDateRange);
+        console.log('4. statistics:', {
+            existe: !!statistics,
+            keys: statistics ? Object.keys(statistics) : []
+        });
+        console.log('5. isLoadingStats:', isLoadingStats);
+        console.log('========================================');
+    }, [historicalData, chartPeriod, statsDateRange, statistics, isLoadingStats]);
 
+    // --- FETCH DATA (ALWAYS MAX) ---
     useEffect(() => {
-        fetchData(symbol, period);
-    }, [symbol, period]);
+        fetchData(symbol);
+    }, [symbol]);
 
-    const fetchData = async (sym, per) => {
+    const fetchData = async (sym) => {
         setLoading(true);
         setError(null);
         try {
-            // Backend handles 'max' for detailed stats internally if needed, 
-            // but for chart optimization, we respect the period.
-            // Note: The backend returns 'chart_data' based on the fetch. 
-            // If we want detailed stats (seasonality) capable of full history 
-            // while showing only 1y chart, the backend might need adjustment 
-            // or we accept that "Statistics" tab uses the 'period' data.
-            // For now, consistent behavior: The App shows data for the selected period.
-            // Enhancement: If tab is 'stats', force max? 
-            // Let's keep it simple as per plan: just pass period.
-            const result = await getTickerData(sym, per, '1d');
-            setData(result);
+            // Always fetch MAX to allow client-side filtering
+            const result = await getTickerData(sym, 'max', '1d');
+
+            // STANDARDIZE KEYS to lowercase immediately
+            // valid backend keys: Date, Open, High, Low, Close, Volume
+            const rawData = result.chart_data || [];
+            const standardizedData = rawData.map(item => ({
+                ...item,
+                date: item.Date || item.date,
+                open: item.Open || item.open,
+                high: item.High || item.high,
+                low: item.Low || item.low,
+                close: item.Close || item.close,
+                volume: item.Volume || item.volume
+            }));
+
+            setBackendData(result);
+            setHistoricalData(standardizedData);
+
+            // Initial translation if available
+            if (result?.info?.longBusinessSummary) {
+                setTranslatedSummary(result.info.longBusinessSummary_es || result.info.longBusinessSummary);
+            }
         } catch (error) {
             console.error("Error fetching data:", error);
-            setError("Failed to load data. Please check if the backend is running. (Error: " + (error.response?.data?.detail || error.message) + ")");
+            setError("Failed to load data. Please check if the backend is running.");
         } finally {
             setLoading(false);
         }
@@ -84,6 +119,133 @@ function App() {
     const handleSearch = (newSymbol) => {
         setSymbol(newSymbol);
     };
+
+    // --- FILTER HELPER ---
+    // --- FILTER HELPER (ROBUST) ---
+    const filterDataByPeriod = (data, period) => {
+        if (!data || data.length === 0) {
+            console.error('No hay datos para filtrar');
+            return [];
+        }
+
+        if (period === 'max' || period === 'MAX') return data;
+
+        const now = new Date();
+        const cutoff = new Date();
+
+        // Safe lowercase check
+        const p = period.toLowerCase();
+
+        switch (p) {
+            case '1mo':
+            case '1m':
+                cutoff.setMonth(now.getMonth() - 1); break;
+            case '3mo':
+            case '3m':
+                cutoff.setMonth(now.getMonth() - 3); break;
+            case '6mo':
+            case '6m':
+                cutoff.setMonth(now.getMonth() - 6); break;
+            case '1y': cutoff.setFullYear(now.getFullYear() - 1); break;
+            case '2y': cutoff.setFullYear(now.getFullYear() - 2); break;
+            case '5y': cutoff.setFullYear(now.getFullYear() - 5); break;
+            case 'ytd': cutoff.setMonth(0); cutoff.setDate(1); break; // Jan 1st current year
+            default: return data;
+        }
+
+        const filtered = data.filter(item => new Date(item.date) >= cutoff);
+        console.log(`Datos filtrados por período (${period}):`, filtered.length, 'de', data.length);
+        return filtered;
+    };
+
+    // --- EFFECT 1: CHART PERIOD UPDATES (Metrics & Technicals) ---
+    useEffect(() => {
+        if (!historicalData || historicalData.length === 0) return;
+
+        const chartData = filterDataByPeriod(historicalData, chartPeriod);
+
+        // 1. Calculate Top Metrics
+        if (chartData.length > 0) {
+            const lastPrice = chartData[chartData.length - 1].close || chartData[chartData.length - 1].Close;
+            const metrics = {
+                currentPrice: lastPrice,
+                totalReturn: calculateTotalReturn(chartData),
+                volatility: calculateVolatility(chartData),
+                sharpeRatio: calculateSharpeRatio(chartData),
+                maxDrawdown: calculateMaxDrawdown(chartData)
+            };
+            setTopMetrics(metrics);
+        }
+
+        // 2. Prepare Technical Analysis Data 
+        // (TechnicalAnalysis component currently does its own calc mostly, 
+        // but we pass filtered data to it)
+
+    }, [historicalData, chartPeriod]);
+
+
+    // --- EFFECT 2: STATS RANGE UPDATES (Statistics Tab) ---
+    useEffect(() => {
+        const loadStatistics = async () => {
+            console.log('=== DEBUG CARGA DE ESTADÍSTICA ===');
+            console.log('historicalData:', historicalData?.length);
+            console.log('statsDateRange:', statsDateRange);
+
+            if (!historicalData || historicalData.length === 0) {
+                console.error('No hay datos históricos');
+                return;
+            }
+
+            try {
+                setIsLoadingStats(true);
+
+                // Filter by specific Date Range
+                // Validate dates
+                const startDate = new Date(statsDateRange.startYear, statsDateRange.startMonth, 1);
+                // End of endMonth (last day): Day 0 of next month provides last day of current
+                const endDate = new Date(statsDateRange.endYear, statsDateRange.endMonth + 1, 0);
+
+                console.log('Rango de fechas para estadística:', startDate, 'a', endDate);
+
+                const statsData = historicalData.filter(dataPoint => {
+                    const date = new Date(dataPoint.date);
+                    return date >= startDate && date <= endDate;
+                });
+
+                console.log('Datos filtrados para estadística:', statsData.length);
+
+                if (statsData.length < 2) {
+                    console.error('Datos insuficientes en el rango seleccionado');
+                    setStatistics(null); // Not enough data
+                    setIsLoadingStats(false);
+                    return;
+                }
+
+                // Calculate Statistics
+                console.log('Calculando estadísticas...');
+                const newStats = {
+                    seasonality: {
+                        monthly_heatmap: calculateMonthlyReturnsHeatmap(statsData),
+                        avg_monthly: calculateAvgMonthlyPerformance(statsData),
+                        avg_daily: calculateAvgDailyPerformance(statsData)
+                    },
+                    distribution: calculateDistributionOfReturns(statsData),
+                    drawdowns: calculateDrawdownAnalysis(statsData)
+                };
+
+                console.log('Estadísticas calculadas:', Object.keys(newStats));
+                setStatistics(newStats);
+                setIsLoadingStats(false);
+            } catch (error) {
+                console.error('Error calculando estadísticas:', error);
+                setIsLoadingStats(false);
+            }
+        };
+
+        loadStatistics();
+
+    }, [historicalData, statsDateRange]);
+
 
     const tabs = [
         { id: 'chart', label: 'GRÁFICO' },
@@ -115,13 +277,13 @@ function App() {
                 {/* Header Info */}
                 <div className="flex justify-between items-center mb-6">
                     <div>
-                        <h2 className="text-3xl font-bold">{data?.info?.shortName || symbol}</h2>
+                        <h2 className="text-3xl font-bold">{backendData?.info?.shortName || symbol}</h2>
                         <div className="text-muted-foreground flex gap-4 mt-1">
                             <span>{symbol}</span>
                             <span>•</span>
-                            <span>{data?.info?.sector || "ETF/Index"}</span>
+                            <span>{backendData?.info?.sector || "ETF/Index"}</span>
                             <span>•</span>
-                            <span>{data?.info?.currency}</span>
+                            <span>{backendData?.info?.currency}</span>
                         </div>
                     </div>
                 </div>
@@ -137,9 +299,13 @@ function App() {
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
                     </div>
                 ) : (
-                    data && (
+                    backendData && (
                         <>
-                            <StatsGrid stats={data.stats} data={data.chart_data} period={period} />
+                            {/* TOP METRICS (Uses Chart Period) */}
+                            <StatsGrid
+                                metrics={topMetrics}
+                                period={chartPeriod}
+                            />
 
                             <Tabs activeTab={activeTab} onTabChange={setActiveTab} tabs={tabs} />
 
@@ -147,7 +313,18 @@ function App() {
                                 {activeTab === 'chart' && (
                                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                                         <div className="lg:col-span-2">
-                                            <StockChart data={data.chart_data} period={period} onPeriodChange={setPeriod} />
+                                            {/* Pass filtered data to Chart or let it filter? 
+                                                Plan said: "Ensure it displays data for chartPeriod only"
+                                                We can pass raw data + period and let it filter, OR pass filtered data.
+                                                StockChart usually takes 'data' and 'period'.
+                                                Let's pass raw `historicalData` but ensure StockChart respects `chartPeriod`.
+                                                Wait, if we pass `historicalData` (MAX), StockChart needs to know `chartPeriod`.
+                                            */}
+                                            <StockChart
+                                                data={historicalData}
+                                                period={chartPeriod}
+                                                onPeriodChange={setChartPeriod}
+                                            />
                                         </div>
                                         <div className="bg-card border border-border rounded-lg p-6 max-h-[600px] overflow-y-auto">
                                             <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
@@ -156,8 +333,8 @@ function App() {
                                             </h3>
                                             <div className="space-y-4 text-sm text-muted-foreground">
                                                 <p>
-                                                    El precio actual es <span className="text-foreground font-medium">${data.stats.current_price?.toFixed(2)}</span>.
-                                                    La volatilidad anualizada es <span className="text-foreground font-medium">{data.stats.annualized_volatility_pct?.toFixed(2)}%</span>.
+                                                    El precio actual es <span className="text-foreground font-medium">${topMetrics.currentPrice?.toFixed(2)}</span>.
+                                                    La volatilidad anualizada es <span className="text-foreground font-medium">{topMetrics.volatility?.toFixed(2)}%</span>.
                                                 </p>
                                                 <div className="p-4 bg-secondary/50 rounded-md mt-4">
                                                     <h4 className="font-semibold text-foreground mb-2">Información de la Empresa</h4>
@@ -169,22 +346,51 @@ function App() {
                                 )}
 
                                 {activeTab === 'technical' && (
-                                    <TechnicalAnalysis data={data.analysis?.technical} period={period} chartData={data.chart_data} />
+                                    <TechnicalAnalysis
+                                        data={backendData.analysis?.technical} // This might need update if we want client-side indicators? 
+                                        // The prompt said "Los indicadores técnicos usan el período del GRÁFICO"
+                                        // "calculate indicators... setTechnicalIndicators" in App.
+                                        // Current TechnicalAnalysis component primarily RENDERS data passed to it OR calculates?
+                                        // Let's check TechnicalAnalysis later. For now pass chart-period filtered data.
+                                        chartData={filterDataByPeriod(historicalData, chartPeriod)}
+                                        period={chartPeriod}
+                                    />
                                 )}
 
                                 {activeTab === 'stats' && (
-                                    <Statistics data={data.analysis} />
+                                    <div>
+                                        <StatsRangeSelector
+                                            statsDateRange={statsDateRange}
+                                            setStatsDateRange={setStatsDateRange}
+                                            historicalData={historicalData}
+                                        />
+                                        {isLoadingStats ? (
+                                            <div className="flex items-center justify-center h-96">
+                                                <div className="text-center">
+                                                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                                                    <p className="text-gray-400">Cargando estadística...</p>
+                                                </div>
+                                            </div>
+                                        ) : statistics ? (
+                                            <Statistics data={statistics} />
+                                        ) : (
+                                            <div className="text-center text-gray-400 py-12">
+                                                <p>No se pudieron cargar las estadísticas. Intente seleccionar un rango más amplio.</p>
+                                            </div>
+                                        )}
+                                    </div>
                                 )}
 
                                 {activeTab === 'ratios' && (
-                                    <Ratios data={data.analysis?.ratios} />
+                                    <Ratios data={backendData.analysis?.ratios} />
                                 )}
                             </div>
                         </>
                     )
-                )}
-            </main>
-        </div>
+                )
+                }
+            </main >
+        </div >
     );
 }
 

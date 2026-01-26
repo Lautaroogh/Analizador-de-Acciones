@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     ComposedChart,
     Line,
@@ -12,37 +12,68 @@ import {
 } from 'recharts';
 
 const StockChart = ({ data, period, onPeriodChange }) => {
-    // Priority 1 & 5
-    // Removed Volume Bar, Upper_Band, Lower_Band
-    // Added Period Selectors
 
-    const periods = ['3mo', '6mo', '1y', '5y', 'max'];
+    const periods = ['1mo', '3mo', '6mo', '1y', '5y', 'max'];
     const periodLabels = {
-        '3mo': '3M', '6mo': '6M', '1y': '1Y', '5y': '5Y', 'max': 'MAX'
+        '1mo': '1M', '3mo': '3M', '6mo': '6M', '1y': '1Y', '5y': '5Y', 'max': 'MAX'
+    };
+
+    const filterData = (rawData, currentPeriod) => {
+        if (!rawData || rawData.length === 0) return [];
+        // Handle case sensitivity
+        const p = currentPeriod.toLowerCase();
+        if (p === 'max') return rawData;
+
+        const now = new Date();
+        const cutoff = new Date();
+
+        switch (p) {
+            case '1mo':
+            case '1m':
+                cutoff.setMonth(now.getMonth() - 1); break;
+            case '3mo':
+            case '3m':
+                cutoff.setMonth(now.getMonth() - 3); break;
+            case '6mo':
+            case '6m':
+                cutoff.setMonth(now.getMonth() - 6); break;
+            case '1y': cutoff.setFullYear(now.getFullYear() - 1); break;
+            case '5y': cutoff.setFullYear(now.getFullYear() - 5); break;
+            default: return rawData;
+        }
+
+        return rawData.filter(item => new Date(item.date) >= cutoff);
     };
 
     // OPTIMIZATION: Downsample data for large datasets
     const optimizeDataForChart = (rawData, currentPeriod) => {
-        if (!rawData || rawData.length === 0) return [];
+        // 1. Filter by date first
+        const filtered = filterData(rawData, currentPeriod);
 
-        // No sampling for short periods
-        if (['3mo'].includes(currentPeriod)) return rawData;
+        if (filtered.length === 0) return [];
 
+        // 2. Downsample if needed
         const maxPoints = 500;
-        if (rawData.length <= maxPoints) return rawData;
+        if (filtered.length <= maxPoints) return filtered;
 
-        const step = Math.ceil(rawData.length / maxPoints);
-        return rawData.filter((_, index) => index % step === 0);
+        const step = Math.ceil(filtered.length / maxPoints);
+        return filtered.filter((_, index) => index % step === 0);
     };
 
     const [chartData, setChartData] = useState([]);
     const [isChartLoading, setIsChartLoading] = useState(false);
 
-    React.useEffect(() => {
+    useEffect(() => {
         setIsChartLoading(true);
         // Simulate a small delay or just process
         const timer = setTimeout(() => {
-            setChartData(optimizeDataForChart(data, period));
+            const optimized = optimizeDataForChart(data, period);
+            console.log("StockChart optimized data:", optimized?.length, "Period:", period);
+            if (optimized && optimized.length > 0) {
+                console.log("First point:", optimized[0]);
+                console.log("Last point:", optimized[optimized.length - 1]);
+            }
+            setChartData(optimized);
             setIsChartLoading(false);
         }, 50); // Small processing delay to allow UI to show loading if needed
         return () => clearTimeout(timer);
@@ -91,7 +122,7 @@ const StockChart = ({ data, period, onPeriodChange }) => {
                     <div className="flex items-center justify-center h-full">
                         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
                     </div>
-                ) : (
+                ) : chartData && chartData.length > 0 ? (
                     <ResponsiveContainer width="100%" height="100%">
                         <ComposedChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                             <defs>
@@ -102,9 +133,15 @@ const StockChart = ({ data, period, onPeriodChange }) => {
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
                             <XAxis
-                                dataKey="Date"
+                                dataKey="date" // Consistent lowercase 'date'
                                 tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
                                 minTickGap={30}
+                                tickFormatter={(str) => {
+                                    // Robust date formatting
+                                    try {
+                                        return new Date(str).toLocaleDateString('es-ES', { month: 'short', day: 'numeric' });
+                                    } catch (e) { return str; }
+                                }}
                             />
                             <YAxis
                                 yAxisId="left"
@@ -119,7 +156,7 @@ const StockChart = ({ data, period, onPeriodChange }) => {
                             <Area
                                 yAxisId="left"
                                 type="monotone"
-                                dataKey="Close"
+                                dataKey="close" // Consistent lowercase 'close'
                                 stroke="#8884d8"
                                 fillOpacity={1}
                                 fill="url(#colorClose)"
@@ -136,14 +173,19 @@ const StockChart = ({ data, period, onPeriodChange }) => {
                                 connectNulls={true}
                                 name="SMA 20"
                             />
-
-                            {/* 
-                            Removed Volume Bar, UpperBB, LowerBB as requested 
-                            This significantly improves render performance by reducing SVG nodes.
-                        */}
-
                         </ComposedChart>
                     </ResponsiveContainer>
+                ) : (
+                    <div className="flex items-center justify-center h-full text-gray-400">
+                        <div className="text-center">
+                            <svg className="mx-auto h-12 w-12 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                            <p>No hay datos disponibles para mostrar</p>
+                            <p className="text-sm mt-2">Intenta seleccionar otro período</p>
+                            {/* Debug info in UI if needed, or check Console */}
+                        </div>
+                    </div>
                 )}
             </div>
         </div>

@@ -266,16 +266,11 @@ const TechnicalAnalysis = ({ data, period, chartData }) => {
                 <div className="flex items-center justify-between">
                     <div>
                         <h3 className="text-lg font-semibold text-foreground">
-                            Análisis Técnico - Período: {period ? period.toUpperCase() : 'MAX'}
+                            Análisis Técnico - Temporalidad: 1D
                         </h3>
-                        {dateRangeText && (
-                            <p className="text-sm text-muted-foreground mt-1">
-                                {dateRangeText}
-                            </p>
-                        )}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                        Última actualización: {formatDate(new Date())}
+                        <p className="text-sm text-muted-foreground mt-1">
+                            Período analizado: {period ? period.toUpperCase() : 'MAX'}
+                        </p>
                     </div>
                 </div>
             </div>

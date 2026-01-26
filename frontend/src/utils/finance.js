@@ -95,3 +95,30 @@ export function calculateMaxDrawdown(historicalData) {
 
     return maxDrawdown;
 }
+
+/**
+ * Calculate Annualized Volatility.
+ * @param {Array} historicalData - Array of objects with 'close' property.
+ * @returns {number} - Annualized Volatility percentage.
+ */
+export function calculateVolatility(historicalData) {
+    if (!historicalData || historicalData.length < 2) return 0;
+
+    const dailyReturns = [];
+    for (let i = 1; i < historicalData.length; i++) {
+        const prev = historicalData[i - 1].close || historicalData[i - 1].Close;
+        const curr = historicalData[i].close || historicalData[i].Close;
+        if (prev) {
+            dailyReturns.push((curr - prev) / prev);
+        }
+    }
+
+    if (dailyReturns.length === 0) return 0;
+
+    const avgReturn = dailyReturns.reduce((sum, r) => sum + r, 0) / dailyReturns.length;
+    const variance = dailyReturns.reduce((sum, r) => sum + Math.pow(r - avgReturn, 2), 0) / dailyReturns.length;
+    const stdDev = Math.sqrt(variance);
+
+    // Annualize (sqrt(252))
+    return stdDev * Math.sqrt(252) * 100;
+}
