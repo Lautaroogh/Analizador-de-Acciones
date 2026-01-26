@@ -1,19 +1,35 @@
+// Helper to parse date string YYYY-MM-DD safely without timezone shift
+// Returns a Date object set to noon local time or extracts components
+function getSafeDate(dateStr) {
+    if (!dateStr) return new Date();
+    // Assuming format YYYY-MM-DD or similar
+    // We append T12:00:00 to ensure we stay in the same day regardless of small timezone offsets
+    // Or better: parse components
+    const part = new Date(dateStr);
+    // If it's a valid date object already
+    if (!isNaN(part.getTime())) {
+        // Fix: interpret as user local time, not UTC, if it was ISO string without time
+        // Actually, easiest way for day-of-week:
+        const d = new Date(dateStr);
+        // Add timezone offset correction if it's defaulting to UTC midnight
+        // But simpler: just use getUTCDay() if the source is YYYY-MM-DD?
+        // Let's stick to appending time to force a safe middle-of-day
+        if (dateStr.length === 10) return new Date(dateStr + "T12:00:00");
+        return d;
+    }
+    return new Date();
+}
+
 export function calculateMonthlyReturnsHeatmap(data) {
     if (!data || data.length === 0) return { index: [], data: [] };
 
-    // Organize by Year -> Month
-    const returnsByYear = {}; // { 2020: { 0: 0.05, 1: -0.02, ... } }
+    const returnsByYear = {};
 
-    // Sort data chronologically first
     const sortedData = [...data].sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    // Calculate monthly returns
-    // We need start and end price of each month
-    // Strategy: Group prices by month, take first and last
-    const monthlyPrices = {}; // { "2020-0": [prices...], "2020-1": ... }
+    const monthlyPrices = {};
 
     sortedData.forEach(day => {
-        const date = new Date(day.date);
+        const date = getSafeDate(day.date);
         const key = `${date.getFullYear()}-${date.getMonth()}`;
         if (!monthlyPrices[key]) monthlyPrices[key] = [];
         monthlyPrices[key].push(day.close || day.Close);
@@ -21,7 +37,6 @@ export function calculateMonthlyReturnsHeatmap(data) {
 
     Object.entries(monthlyPrices).forEach(([key, prices]) => {
         const [year, month] = key.split('-').map(Number);
-
         const first = prices[0];
         const last = prices[prices.length - 1];
         const ret = (last - first) / first;
@@ -30,7 +45,6 @@ export function calculateMonthlyReturnsHeatmap(data) {
         returnsByYear[year][month] = ret;
     });
 
-    // Format for Heatmap (years as rows, months as cols)
     const years = Object.keys(returnsByYear).sort().map(Number);
     const heatmapData = years.map(year => returnsByYear[year]);
 
@@ -38,23 +52,19 @@ export function calculateMonthlyReturnsHeatmap(data) {
 }
 
 export function calculateAvgMonthlyPerformance(data) {
-    // Similar to heatmap but average by month index (0-11)
     if (!data || data.length === 0) return {};
 
-    const returnsByMonthInfo = {}; // { 0: [], 1: [] ... }
-
-    // Reuse logic to get monthly returns first
+    const returnsByMonthInfo = {};
     const sortedData = [...data].sort((a, b) => new Date(a.date) - new Date(b.date));
     const monthlyPrices = {};
 
     sortedData.forEach(day => {
-        const date = new Date(day.date);
+        const date = getSafeDate(day.date);
         const key = `${date.getFullYear()}-${date.getMonth()}`;
         if (!monthlyPrices[key]) monthlyPrices[key] = [];
         monthlyPrices[key].push(day.close || day.Close);
     });
 
-    // Calculate return for each specific month-year instance
     Object.entries(monthlyPrices).forEach(([key, prices]) => {
         const [_, month] = key.split('-').map(Number);
         const first = prices[0];
@@ -65,14 +75,11 @@ export function calculateAvgMonthlyPerformance(data) {
         returnsByMonthInfo[month].push(ret);
     });
 
-    // Average them
     const avgMonthly = {};
     for (let m = 0; m < 12; m++) {
         const rets = returnsByMonthInfo[m] || [];
         const avg = rets.length > 0 ? rets.reduce((a, b) => a + b, 0) / rets.length : 0;
-        avgMonthly[m + 1] = avg; // Backend used 1-based index string usually? 
-        // frontend expects object keys 1..12 or 0..11? 
-        // Statistics.jsx uses: monthsShort[parseInt(m) - 1] so it expects keys "1", "2"... "12"
+        avgMonthly[m + 1] = avg;
     }
 
     return avgMonthly;
@@ -84,16 +91,14 @@ export function calculateAvgDailyPerformance(data) {
     const returnsByDay = { 0: [], 1: [], 2: [], 3: [], 4: [] }; // Mon-Fri
 
     for (let i = 1; i < data.length; i++) {
-        const date = new Date(data[i].date);
+        // Fix: Use Safe Date parsing to avoid Timezone shift (Mon -> Sun)
+        const date = getSafeDate(data[i].date);
         const day = date.getDay(); // 0=Sun, 1=Mon... 6=Sat
 
         // Skip weekends
         if (day === 0 || day === 6) continue;
 
-        // Map JS day to 0=Mon, 4=Fri logic if needed, or just use 1-5
-        // Statistics.jsx expects keys 0..4 (Mon..Fri) based on "daysShort[parseInt(d)]"
-        // JS: 1=Mon, 5=Fri. So index = day - 1.
-        const index = day - 1;
+        const index = day - 1; // 0=Mon, 4=Fri
 
         const prev = data[i - 1].close || data[i - 1].Close;
         const curr = data[i].close || data[i].Close;
@@ -107,7 +112,7 @@ export function calculateAvgDailyPerformance(data) {
     const avgDaily = {};
     Object.keys(returnsByDay).forEach(idx => {
         const rets = returnsByDay[idx];
-        avgDaily[idx] = rets.length > 0 ? (rets.reduce((a, b) => a + b, 0) / rets.length) * 100 : 0; // Return as percentage directly to match existing
+        avgDaily[idx] = rets.length > 0 ? (rets.reduce((a, b) => a + b, 0) / rets.length) * 100 : 0;
     });
 
     return avgDaily;
@@ -140,7 +145,7 @@ export function calculateDistributionOfReturns(data, bins = 20) {
 
     dailyReturns.forEach(ret => {
         let binIndex = Math.floor((ret - min) / step);
-        if (binIndex >= bins) binIndex = bins - 1; // max value goes to last bin
+        if (binIndex >= bins) binIndex = bins - 1;
         histogram[binIndex]++;
     });
 
@@ -169,26 +174,75 @@ export function calculateDistributionOfReturns(data, bins = 20) {
 }
 
 export function calculateDrawdownAnalysis(data) {
-    if (!data || data.length < 2) return { max_drawdown: 0 };
-
-    // We already have max_drawdown in finance.js, but let's re-use or re-implement if needed for stats structure
-    // Stats tab expects { drawdowns: { max_drawdown: X } }
+    if (!data || data.length < 2) return { max_drawdown: 0, avg_drawdown: 0, sortino: 0, var_95: 0 };
 
     let maxDrawdown = 0;
     let peak = -Infinity;
 
+    // For Avg Drawdown: average of daily drawdowns (when in drawdown)
+    // Or average of distinct drawdown periodic maximums?
+    // "Avg Daily Drawdown" is a common simple interpretation: average of all 'dd' values where dd < 0.
+    let drawdownSum = 0;
+    let drawdownCount = 0;
+
+    const drawdowns = [];
+
     data.forEach(pt => {
         const price = pt.close || pt.Close;
         if (price > peak) peak = price;
-        const dd = (price - peak) / peak;
+        const dd = (price - peak) / peak; // negative or 0
+
         if (dd < maxDrawdown) maxDrawdown = dd;
+
+        // Track for average
+        if (dd < 0) {
+            drawdownSum += dd;
+            drawdownCount++;
+            drawdowns.push(dd); // Store all daily drawdowns
+        }
     });
 
-    return { max_drawdown: maxDrawdown };
+    // Average Drawdown (of days spent in drawdown)
+    const avgDrawdown = drawdownCount > 0 ? drawdownSum / drawdownCount : 0;
+
+    // --- Additional Risk Metrics ---
+
+    // 1. Value at Risk (VaR) 95%
+    // Sort daily returns and find the 5th percentile
+    const returns = [];
+    for (let i = 1; i < data.length; i++) {
+        const prev = data[i - 1].close || data[i - 1].Close;
+        const curr = data[i].close || data[i].Close;
+        returns.push((curr - prev) / prev);
+    }
+
+    returns.sort((a, b) => a - b);
+    const varIndex = Math.floor(returns.length * 0.05);
+    const var95 = returns[varIndex] || 0;
+
+    // 2. Sortino Ratio
+    // (Mean Return - Target) / Downside Deviation
+    // Target = 0 (Risk Free assumption for simplicity in this func, logic usually in finance.js but we can adding here)
+    const meanRet = returns.reduce((a, b) => a + b, 0) / returns.length;
+    const downsideReturns = returns.filter(r => r < 0);
+    const downsideVariance = downsideReturns.reduce((a, b) => a + Math.pow(b - 0, 2), 0) / returns.length; // Divide by total N, not just downside N
+    const downsideDev = Math.sqrt(downsideVariance);
+
+    // Annualize (Optional, but Ratios are usually annualized)
+    // Assuming daily data (252)
+    const annualizedReturn = meanRet * 252;
+    const annualizedDownsideDev = downsideDev * Math.sqrt(252);
+
+    const sortino = annualizedDownsideDev !== 0 ? annualizedReturn / annualizedDownsideDev : 0;
+
+    return {
+        max_drawdown: maxDrawdown,
+        avg_drawdown: avgDrawdown,
+        var_95: var95,
+        sortino: sortino
+    };
 }
 
-// Placeholder for Correlation if we only have 1 asset, meaningful only with benchmark
-// For now returns mock or empty
 export function calculateCorrelationMatrix(data) {
     return {};
 }

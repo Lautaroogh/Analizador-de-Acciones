@@ -1,5 +1,72 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, CartesianGrid } from 'recharts';
+
+// Tooltip Component (Active for Risk Metrics)
+const MetricTooltip = ({ title, description, calculation }) => {
+    const [isVisible, setIsVisible] = useState(false);
+
+    return (
+        <div className="relative inline-block ml-2 z-10">
+            <button
+                onMouseEnter={() => setIsVisible(true)}
+                onMouseLeave={() => setIsVisible(false)}
+                className="text-gray-400 hover:text-blue-400 transition-colors cursor-help"
+            >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </button>
+
+            {isVisible && (
+                <div className="absolute right-0 w-64 bg-gray-800 border border-gray-700 rounded-lg shadow-xl p-3 bottom-6 z-50">
+                    <h4 className="text-white font-semibold mb-1 text-xs">{title}</h4>
+                    <p className="text-xs text-gray-300 mb-2 leading-snug">{description}</p>
+                    {calculation && (
+                        <div>
+                            <p className="text-[10px] font-semibold text-blue-400 mb-0.5">Cálculo:</p>
+                            <p className="text-[10px] text-gray-400 font-mono bg-gray-900 p-1 rounded">
+                                {calculation}
+                            </p>
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
+const riskExplanations = {
+    maxDrawdown: {
+        title: "Max Drawdown",
+        description: "La mayor caída porcentual desde un pico hasta un valle en el período.",
+        calculation: "(Min - Pico) / Pico"
+    },
+    avgDrawdown: {
+        title: "Avg Drawdown",
+        description: "La profundidad promedio de las caídas diarias durante períodos negativos.",
+        calculation: "Promedio(Caídas Diarias < 0)"
+    },
+    var95: {
+        title: "Value at Risk (95%)",
+        description: "La pérdida máxima diaria esperada con un 95% de confianza.",
+        calculation: "Percentil 5 de retornos diarios"
+    },
+    sortino: {
+        title: "Sortino Ratio",
+        description: "Mide el rendimiento ajustado por el riesgo a la baja (volatilidad negativa).",
+        calculation: "(Retorno - TasaLibre) / Desv.Bajista"
+    },
+    skewness: {
+        title: "Skewness (Asimetría)",
+        description: "Indica hacia dónde se inclina la distribución de retornos. Negativo = más caídas fuertes.",
+        calculation: "3er Momento / Desv.Est^3"
+    },
+    kurtosis: {
+        title: "Kurtosis (Curtosis)",
+        description: "Mide la frecuencia de eventos extremos ('colas gordas'). Alto = más riesgo de sorpresas.",
+        calculation: "(4to Momento / Desv.Est^4) - 3"
+    }
+};
 
 const Statistics = ({ data }) => {
     if (!data) return <div className="p-8 text-center text-muted-foreground">Cargando estadística...</div>;
@@ -101,10 +168,10 @@ const Statistics = ({ data }) => {
                 <div className="bg-card border border-border rounded-lg p-6 h-80">
                     <h3 className="text-lg font-semibold mb-4">Avg Monthly Performance</h3>
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={monthlyChartData}>
+                        <BarChart data={monthlyChartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted))" />
-                            <XAxis dataKey="name" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-                            <YAxis tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                            <XAxis dataKey="name" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
+                            <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
                             <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'hsl(var(--muted)/0.2)' }} />
                             <Bar dataKey="value" name="Return %">
                                 {monthlyChartData.map((entry, index) => (
@@ -118,10 +185,10 @@ const Statistics = ({ data }) => {
                 <div className="bg-card border border-border rounded-lg p-6 h-80">
                     <h3 className="text-lg font-semibold mb-4">Avg Daily Performance</h3>
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={dailyChartData}>
+                        <BarChart data={dailyChartData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted))" />
-                            <XAxis dataKey="name" tick={{ fill: 'hsl(var(--muted-foreground))' }} />
-                            <YAxis tick={{ fill: 'hsl(var(--muted-foreground))' }} />
+                            <XAxis dataKey="name" tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
+                            <YAxis tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 12 }} />
                             <Tooltip content={<CustomBarTooltip />} cursor={{ fill: 'hsl(var(--muted)/0.2)' }} />
                             <Bar dataKey="value" name="Return %">
                                 {dailyChartData.map((entry, index) => (
@@ -138,8 +205,12 @@ const Statistics = ({ data }) => {
                 <div className="col-span-1 md:col-span-2 bg-card border border-border rounded-lg p-6 h-80">
                     <h3 className="text-lg font-semibold mb-4">Return Distribution</h3>
                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={distChartData}>
-                            <XAxis dataKey="range" tick={false} />
+                        <BarChart data={distChartData} margin={{ top: 5, bottom: 20 }}>
+                            <XAxis
+                                dataKey="range"
+                                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+                                minTickGap={10}
+                            />
                             <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))' }} />
                             <Bar dataKey="count" fill="#3b82f6" name="Days" />
                         </BarChart>
@@ -147,23 +218,52 @@ const Statistics = ({ data }) => {
                 </div>
 
                 <div className="col-span-1 bg-card border border-border rounded-lg p-6">
-                    <h3 className="text-lg font-semibold mb-4">Risk Metrics</h3>
+                    <h3 className="text-lg font-semibold mb-1">Risk Metrics</h3>
+                    <p className="text-xs text-muted-foreground mb-4">
+                        (Calculado según el período seleccionado)
+                    </p>
+
                     <div className="space-y-4">
-                        <div className="flex justify-between border-b border-border pb-2">
-                            <span className="text-muted-foreground">Max Drawdown</span>
-                            {/* Priority 2/4: Max Drawdown in RED */}
+                        <div className="flex justify-between items-center border-b border-border pb-2">
+                            <div className="flex items-center">
+                                <span className="text-muted-foreground">Max Drawdown</span>
+                                <MetricTooltip {...riskExplanations.maxDrawdown} />
+                            </div>
                             <span className="font-bold text-red-500">{(drawdowns.max_drawdown * 100).toFixed(2)}%</span>
                         </div>
-                        <div className="flex justify-between border-b border-border pb-2">
-                            <span className="text-muted-foreground">Avg Drawdown</span>
-                            <span className="font-bold text-red-500 text-xs">N/A (Update to V4 for Avg)</span>
+                        <div className="flex justify-between items-center border-b border-border pb-2">
+                            <div className="flex items-center">
+                                <span className="text-muted-foreground">Avg Drawdown</span>
+                                <MetricTooltip {...riskExplanations.avgDrawdown} />
+                            </div>
+                            <span className="font-bold text-red-400">{(drawdowns.avg_drawdown * 100).toFixed(2)}%</span>
                         </div>
-                        <div className="flex justify-between border-b border-border pb-2">
-                            <span className="text-muted-foreground">Skewness</span>
+                        <div className="flex justify-between items-center border-b border-border pb-2">
+                            <div className="flex items-center">
+                                <span className="text-muted-foreground">VaR (95%)</span>
+                                <MetricTooltip {...riskExplanations.var95} />
+                            </div>
+                            <span className="font-bold text-red-400">{(drawdowns.var_95 * 100).toFixed(2)}%</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-border pb-2">
+                            <div className="flex items-center">
+                                <span className="text-muted-foreground">Sortino Ratio</span>
+                                <MetricTooltip {...riskExplanations.sortino} />
+                            </div>
+                            <span className="font-mono">{drawdowns.sortino?.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-border pb-2">
+                            <div className="flex items-center">
+                                <span className="text-muted-foreground">Skewness</span>
+                                <MetricTooltip {...riskExplanations.skewness} />
+                            </div>
                             <span className="font-mono">{distribution.skew.toFixed(2)}</span>
                         </div>
-                        <div className="flex justify-between border-b border-border pb-2">
-                            <span className="text-muted-foreground">Kurtosis</span>
+                        <div className="flex justify-between items-center border-b border-border pb-2">
+                            <div className="flex items-center">
+                                <span className="text-muted-foreground">Kurtosis</span>
+                                <MetricTooltip {...riskExplanations.kurtosis} />
+                            </div>
                             <span className="font-mono">{distribution.kurtosis.toFixed(2)}</span>
                         </div>
                     </div>
