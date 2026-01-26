@@ -162,10 +162,12 @@ def calculate_ratios(info):
             "Price/Book": g("priceToBook"),
             "Price/Sales": g("priceToSalesTrailing12Months"),
             "Enterprise Value/EBITDA": g("enterpriseToEbitda"),
+            "Enterprise Value/Revenue": g("enterpriseToRevenue"),
         },
         "Profitability": {
             "Profit Margin": g("profitMargins"),
             "Operating Margin": g("operatingMargins"),
+            "Gross Margin": g("grossMargins"),
             "Return on Assets": g("returnOnAssets"),
             "Return on Equity": g("returnOnEquity"),
             "EBITDA Margins": g("ebitdaMargins"),
@@ -176,6 +178,11 @@ def calculate_ratios(info):
             "Debt/Equity": g("debtToEquity"),
             "Total Cash": g("totalCash"),
             "Total Debt": g("totalDebt"),
+            "Cash Per Share": g("totalCashPerShare"),
+        },
+        "Cash Flow": {
+            "Operating Cash Flow": g("operatingCashflow"),
+            "Free Cash Flow": g("freeCashflow"),
         },
         "Growth": {
             "Revenue Growth": g("revenueGrowth"),
@@ -185,6 +192,16 @@ def calculate_ratios(info):
             "Dividend Rate": g("dividendRate"),
             "Dividend Yield": g("dividendYield"),
             "Payout Ratio": g("payoutRatio"),
+        },
+        "Analyst Targets": {
+            "Target Mean Price": g("targetMeanPrice"),
+            "Target High Price": g("targetHighPrice"),
+            "Target Low Price": g("targetLowPrice"),
+            "Recommendation": g("recommendationKey"),
+        },
+        "Short Info": {
+            "Short Ratio": g("shortRatio"),
+            "Short % of Float": g("shortPercentOfFloat"),
         },
         "General": {
             "Market Cap": g("marketCap"),

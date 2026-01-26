@@ -7,8 +7,11 @@ const Ratios = ({ data }) => {
         { key: "Valuation", title: "Valuation", color: "border-blue-500" },
         { key: "Profitability", title: "Profitability", color: "border-green-500" },
         { key: "Liquidity & Debt", title: "Liquidity & Debt", color: "border-purple-500" },
+        { key: "Cash Flow", title: "Cash Flow", color: "border-teal-500" },
         { key: "Growth", title: "Growth", color: "border-yellow-500" },
         { key: "Dividends", title: "Dividends", color: "border-pink-500" },
+        { key: "Analyst Targets", title: "Analyst Estimates", color: "border-indigo-500" },
+        { key: "Short Info", title: "Short Interest", color: "border-red-400" },
         { key: "General", title: "General Info", color: "border-gray-500" },
     ];
 
