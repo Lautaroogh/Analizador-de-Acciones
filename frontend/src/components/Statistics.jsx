@@ -54,7 +54,7 @@ const riskExplanations = {
     sortino: {
         title: "Sortino Ratio",
         description: "Mide el rendimiento ajustado por el riesgo a la baja (volatilidad negativa).",
-        calculation: "(Retorno - TasaLibre) / Desv.Bajista"
+        calculation: "Retorno Anualizado / Desv. Bajista Anualizada"
     },
     skewness: {
         title: "Skewness (Asimetría)",
