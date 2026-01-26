@@ -105,10 +105,32 @@ const Statistics = ({ data }) => {
             value: val // Already percent from backend
         }));
 
-    const distChartData = distribution.histogram.map((count, i) => ({
-        range: `${(distribution.bins[i] * 100).toFixed(1)}%`,
-        count: count
-    }));
+    const getColorForReturn = (returnValue) => {
+        if (returnValue <= -5) return '#dc2626';  // Rojo muy oscuro
+        if (returnValue <= -3) return '#ef4444';  // Rojo oscuro
+        if (returnValue <= -1) return '#f87171';  // Rojo medio
+        if (returnValue < 0) return '#fca5a5';    // Rojo claro
+        if (returnValue === 0) return '#6b7280';  // Gris neutral
+        if (returnValue < 1) return '#86efac';    // Verde claro
+        if (returnValue < 3) return '#4ade80';    // Verde medio
+        if (returnValue < 5) return '#22c55e';    // Verde oscuro
+        return '#16a34a';                          // Verde muy oscuro
+    };
+
+    const distChartData = distribution.histogram.map((count, i) => {
+        // bins[i] is start edge, bins[i+1] is end edge (raw logic returns)
+        // Convert to percentage
+        const start = distribution.bins[i] * 100;
+        const end = distribution.bins[i + 1] * 100;
+        const midpoint = (start + end) / 2;
+
+        return {
+            rangeStart: start.toFixed(2),
+            rangeEnd: end.toFixed(2),
+            midpoint: midpoint.toFixed(2),
+            count: count
+        };
+    });
 
     // Detailed Tooltip Component
     const CustomBarTooltip = ({ active, payload }) => {
@@ -202,17 +224,86 @@ const Statistics = ({ data }) => {
 
             {/* 3. METRICS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="col-span-1 md:col-span-2 bg-card border border-border rounded-lg p-6 h-80">
+                <div className="col-span-1 md:col-span-2 bg-card border border-border rounded-lg p-6 h-96">
                     <h3 className="text-lg font-semibold mb-4">Return Distribution</h3>
-                    <ResponsiveContainer width="100%" height="100%">
+
+                    {/* Legend */}
+                    <div className="flex flex-wrap items-center gap-3 mb-4 text-xs justify-center md:justify-start">
+                        <span className="text-gray-400 font-semibold">Leyenda:</span>
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: '#dc2626' }}></div>
+                            <span className="text-gray-400">≤ -5%</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: '#f87171' }}></div>
+                            <span className="text-gray-400">-5% a -1%</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: '#6b7280' }}></div>
+                            <span className="text-gray-400">~0%</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: '#86efac' }}></div>
+                            <span className="text-gray-400">0% a 1%</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: '#22c55e' }}></div>
+                            <span className="text-gray-400">1% a 5%</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <div className="w-3 h-3 rounded" style={{ backgroundColor: '#16a34a' }}></div>
+                            <span className="text-gray-400">&gt; 5%</span>
+                        </div>
+                    </div>
+
+                    <ResponsiveContainer width="100%" height="80%">
                         <BarChart data={distChartData} margin={{ top: 5, bottom: 20 }}>
                             <XAxis
-                                dataKey="range"
-                                tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
-                                minTickGap={10}
+                                dataKey="midpoint"
+                                stroke="#9ca3af"
+                                tick={{ fill: '#9ca3af', fontSize: 11 }}
+                                tickFormatter={(value) => `${value}%`}
+                                label={{
+                                    value: 'Retorno diario (%)',
+                                    position: 'insideBottom',
+                                    offset: -10,
+                                    style: { fill: '#9ca3af', fontSize: 12 }
+                                }}
                             />
-                            <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--popover))', borderColor: 'hsl(var(--border))' }} />
-                            <Bar dataKey="count" fill="#3b82f6" name="Days" />
+                            <Tooltip
+                                cursor={{ fill: 'transparent' }}
+                                content={({ active, payload }) => {
+                                    if (active && payload && payload.length) {
+                                        const d = payload[0].payload;
+                                        // Calculate percentage of total days
+                                        const totalDays = distChartData.reduce((acc, curr) => acc + curr.count, 0);
+                                        const percentage = ((d.count / totalDays) * 100).toFixed(1);
+
+                                        return (
+                                            <div className="bg-gray-800 border border-gray-700 rounded-lg p-3 shadow-lg">
+                                                <p className="text-white font-semibold mb-1">
+                                                    Rango: {d.rangeStart}% a {d.rangeEnd}%
+                                                </p>
+                                                <p className="text-blue-400 text-sm">
+                                                    Frecuencia: {d.count} días
+                                                </p>
+                                                <p className="text-gray-400 text-xs mt-1">
+                                                    {percentage}% del período analizado
+                                                </p>
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                }}
+                            />
+                            <Bar dataKey="count" name="Days">
+                                {distChartData.map((entry, index) => (
+                                    <Cell
+                                        key={`cell-${index}`}
+                                        fill={getColorForReturn(parseFloat(entry.midpoint))}
+                                    />
+                                ))}
+                            </Bar>
                         </BarChart>
                     </ResponsiveContainer>
                 </div>

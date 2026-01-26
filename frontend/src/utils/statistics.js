@@ -118,7 +118,7 @@ export function calculateAvgDailyPerformance(data) {
     return avgDaily;
 }
 
-export function calculateDistributionOfReturns(data, bins = 20) {
+export function calculateDistributionOfReturns(data, targetBins = 20) {
     if (!data || data.length < 2) return { histogram: [], bins: [], skew: 0, kurtosis: 0 };
 
     const dailyReturns = [];
@@ -130,26 +130,7 @@ export function calculateDistributionOfReturns(data, bins = 20) {
 
     if (dailyReturns.length === 0) return { histogram: [], bins: [], skew: 0, kurtosis: 0 };
 
-    // Histogram
-    const min = Math.min(...dailyReturns);
-    const max = Math.max(...dailyReturns);
-    const range = max - min;
-    const step = range / bins;
-
-    const histogram = new Array(bins).fill(0);
-    const binEdges = [];
-
-    for (let i = 0; i <= bins; i++) {
-        binEdges.push(min + i * step);
-    }
-
-    dailyReturns.forEach(ret => {
-        let binIndex = Math.floor((ret - min) / step);
-        if (binIndex >= bins) binIndex = bins - 1;
-        histogram[binIndex]++;
-    });
-
-    // Moments
+    // Moments (calculated on raw data)
     const n = dailyReturns.length;
     const mean = dailyReturns.reduce((a, b) => a + b, 0) / n;
 
@@ -161,13 +142,62 @@ export function calculateDistributionOfReturns(data, bins = 20) {
     const m3 = dailyReturns.reduce((a, b) => a + Math.pow(b - mean, 3), 0) / n;
     const skew = m3 / Math.pow(stdDev, 3);
 
-    // Kurtosis (Fisher's definition: normal = 0, so subtract 3)
+    // Kurtosis
     const m4 = dailyReturns.reduce((a, b) => a + Math.pow(b - mean, 4), 0) / n;
     const kurtosis = (m4 / Math.pow(stdDev, 4)) - 3;
 
+    // Zero-Aligned Histogram
+    // We want 0.0 to be a bin boundary.
+    const min = Math.min(...dailyReturns);
+    const max = Math.max(...dailyReturns);
+
+    // Determine a "nice" step size
+    // Raw range
+    const range = max - min;
+    const approxStep = range / targetBins;
+
+    // We stick to the approx step but anchor at 0
+    const step = approxStep;
+
+    // Calculate start and end bins aligned to step from 0
+    // start = floor(min / step) * step
+    // end = ceil(max / step) * step
+
+    const startEdge = Math.floor(min / step) * step;
+    const endEdge = Math.ceil(max / step) * step;
+
+    // Create bins
+    const binEdges = [];
+    let currentEdge = startEdge;
+
+    // Safety break to prevent infinite loops if step is 0 (though range > 0 check handles it implicitly if data distinct)
+    if (step <= 0) return { histogram: [], bins: [], skew: 0, kurtosis: 0 };
+
+    // Build edges array
+    // We add a small epsilon to endEdge comparison to handle float precision issues
+    while (currentEdge <= endEdge + step / 1000) {
+        binEdges.push(currentEdge);
+        currentEdge += step;
+    }
+
+    const numBins = binEdges.length - 1;
+    const histogram = new Array(numBins).fill(0);
+
+    dailyReturns.forEach(ret => {
+        // Find bin index
+        // index = floor((ret - startEdge) / step)
+        let binIndex = Math.floor((ret - startEdge) / step);
+
+        // Handle edge cases (max value might fall exactly on last edge or slightly over due to precision)
+        if (binIndex < 0) binIndex = 0;
+        if (binIndex >= numBins) binIndex = numBins - 1;
+
+        histogram[binIndex]++;
+    });
+
     return {
         histogram,
-        bins: binEdges,
+        bins: binEdges, // These are raw values (e.g. -0.05, 0.0, 0.05)
         skew: isNaN(skew) ? 0 : skew,
         kurtosis: isNaN(kurtosis) ? 0 : kurtosis
     };
