@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 const api = axios.create({
-    baseURL: '/api', // Use relative path via proxy
+    baseURL: import.meta.env.VITE_API_URL || '/api', // Use env var in prod, relative proxy in dev
 });
 
 export const searchTicker = async (query) => {
