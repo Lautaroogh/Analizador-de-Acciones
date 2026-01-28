@@ -188,63 +188,48 @@ function App() {
     useEffect(() => {
         const loadStatistics = async () => {
             console.log('=== DEBUG CARGA DE ESTADÍSTICA ===');
-            console.log('historicalData:', historicalData?.length);
+            console.log('symbol:', symbol);
             console.log('statsDateRange:', statsDateRange);
 
-            if (!historicalData || historicalData.length === 0) {
-                console.error('No hay datos históricos');
+            if (!symbol) {
+                console.error('No hay símbolo seleccionado');
                 return;
             }
 
             try {
                 setIsLoadingStats(true);
 
-                // Filter by specific Date Range
-                // Validate dates
+                // Construir fechas en formato YYYY-MM-DD
                 const startDate = new Date(statsDateRange.startYear, statsDateRange.startMonth, 1);
-                // End of endMonth (last day): Day 0 of next month provides last day of current
-                const endDate = new Date(statsDateRange.endYear, statsDateRange.endMonth + 1, 0);
+                const endDate = new Date(statsDateRange.endYear, statsDateRange.endMonth + 1, 0); // Último día del mes
 
-                console.log('Rango de fechas para estadística:', startDate, 'a', endDate);
+                const startDateStr = startDate.toISOString().split('T')[0];
+                const endDateStr = endDate.toISOString().split('T')[0];
 
-                const statsData = historicalData.filter(dataPoint => {
-                    const date = new Date(dataPoint.date);
-                    return date >= startDate && date <= endDate;
-                });
+                console.log(`Llamando al backend con rango: ${startDateStr} a ${endDateStr}`);
 
-                console.log('Datos filtrados para estadística:', statsData.length);
+                // **LLAMAR AL BACKEND CON RANGO DE FECHAS**
+                const result = await getTickerData(symbol, 'max', '1d', startDateStr, endDateStr);
 
-                if (statsData.length < 2) {
-                    console.error('Datos insuficientes en el rango seleccionado');
-                    setStatistics(null); // Not enough data
-                    setIsLoadingStats(false);
-                    return;
+                if (result && result.analysis) {
+                    console.log('✓ Estadísticas recibidas del backend');
+                    setStatistics(result.analysis);
+                } else {
+                    console.error('Backend no tiene datos de análisis');
+                    setStatistics(null);
                 }
 
-                // Calculate Statistics
-                console.log('Calculando estadísticas...');
-                const newStats = {
-                    seasonality: {
-                        monthly_heatmap: calculateMonthlyReturnsHeatmap(statsData),
-                        avg_monthly: calculateAvgMonthlyPerformance(statsData),
-                        avg_daily: calculateAvgDailyPerformance(statsData)
-                    },
-                    distribution: calculateDistributionOfReturns(statsData),
-                    drawdowns: calculateDrawdownAnalysis(statsData)
-                };
-
-                console.log('Estadísticas calculadas:', Object.keys(newStats));
-                setStatistics(newStats);
                 setIsLoadingStats(false);
             } catch (error) {
-                console.error('Error calculando estadísticas:', error);
+                console.error('Error cargando estadísticas:', error);
                 setIsLoadingStats(false);
             }
         };
 
         loadStatistics();
 
-    }, [historicalData, statsDateRange]);
+    }, [symbol, statsDateRange]);
+
 
 
     const tabs = [

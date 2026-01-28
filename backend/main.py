@@ -60,11 +60,22 @@ def search_ticker(q: str = Query(..., min_length=1)):
         return []
 
 @app.get("/api/ticker/{symbol}")
-def get_ticker_data(symbol: str, period: str = "max", interval: str = "1d"):
+def get_ticker_data(
+    symbol: str, 
+    period: str = "max", 
+    interval: str = "1d",
+    start_date: str = None,  # ← NUEVO: Fecha de inicio en formato YYYY-MM-DD
+    end_date: str = None     # ← NUEVO: Fecha de fin en formato YYYY-MM-DD
+):
     try:
         # Fetch Data
         ticker = yf.Ticker(symbol)
-        history = ticker.history(period=period, interval=interval)
+        
+        # CAMBIO: Descargar con fechas específicas si se proporcionan
+        if start_date and end_date:
+            history = ticker.history(start=start_date, end=end_date, interval=interval)
+        else:
+            history = ticker.history(period=period, interval=interval)
         
         if history.empty:
             raise HTTPException(status_code=404, detail="No data found for symbol")
@@ -87,8 +98,13 @@ def get_ticker_data(symbol: str, period: str = "max", interval: str = "1d"):
         # We'll calculate indicators on the full dataset.
         df_indicators, technical_indicators = calculate_advanced_indicators(history)
         
-        # 2. Seasonality
-        seasonality = calculate_seasonality(history)
+        # 2. Seasonality - CAMBIO: Pasar fechas a la función
+        seasonality = calculate_seasonality(
+            history, 
+            ticker=symbol,
+            start_date=start_date,  # ← NUEVO
+            end_date=end_date        # ← NUEVO
+        )
         
         # 3. Distribution & Drawdowns
         distribution = calculate_distribution(history)

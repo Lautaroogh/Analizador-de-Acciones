@@ -3,6 +3,9 @@ import numpy as np
 from scipy import stats
 import ta
 import json
+import yfinance as yf
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
 
 def calculate_advanced_indicators(data):
     """
@@ -89,29 +92,168 @@ def calculate_advanced_indicators(data):
     
     return df, indicators
 
-def calculate_seasonality(data):
+def calculate_seasonality(data, ticker=None, start_date=None, end_date=None):
     """
     Calculates monthly and day-of-week average returns.
+    
+    Args:
+        data: DataFrame con datos diarios
+        ticker: Símbolo del ticker
+        start_date: Fecha de inicio en formato 'YYYY-MM-DD' (opcional)
+        end_date: Fecha de fin en formato 'YYYY-MM-DD' (opcional)
     """
     df = data.copy()
     df['Returns'] = df['Close'].pct_change()
     df['Month'] = df.index.month
-    df['DayOfWeek'] = df.index.dayofweek # 0=Mon, 6=Sun
+    df['DayOfWeek'] = df.index.dayofweek
     df['Year'] = df.index.year
 
-    # Monthly Returns Heatmap Data
-    # Pivot table: Year vs Month
-    monthly_returns = df.groupby(['Year', 'Month'])['Returns'].apply(lambda x: (x + 1).prod() - 1).reset_index()
-    monthly_heatmap = monthly_returns.pivot(index='Year', columns='Month', values='Returns')
+    # ========================================
+    # PARTE 1: MONTHLY HEATMAP Y AVG MONTHLY
+    # (Usando datos MENSUALES - igual que mi script)
+    # ========================================
+    monthly_heatmap = None
+    avg_monthly_dict = {}
     
-    # Average returns
-    avg_monthly = df.groupby('Month')['Returns'].mean() * 21 # Approx trading days per month for magnitude
-    avg_daily = df.groupby('DayOfWeek')['Returns'].mean() * 100 # In percent
+    if ticker:
+        search_ticker = ticker
+        
+        try:
+            # ============================================
+            # DESCARGA CON RANGO ESPECÍFICO (como mi script personal)
+            # ============================================
+            if start_date and end_date:
+                # Calcular 1 mes antes para tener el mes de referencia
+                # (Igual que mi script: adjusted_start = start_dt - relativedelta(months=1))
+                start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+                adjusted_start = (start_dt - relativedelta(months=1)).strftime('%Y-%m-%d')
+                
+                print(f"📅 Descargando datos mensuales de {adjusted_start} a {end_date}")
+                
+                # Descargar con rango específico (EXACTAMENTE como mi script)
+                monthly_data = yf.download(
+                    search_ticker,
+                    start=adjusted_start,
+                    end=end_date,
+                    interval="1mo",
+                    auto_adjust=False,
+                    progress=False
+                )
+                
+                # Fallback con Ticker.history si download falla
+                if monthly_data.empty:
+                    monthly_data = yf.Ticker(search_ticker).history(
+                        start=adjusted_start,
+                        end=end_date,
+                        interval="1mo",
+                        auto_adjust=False
+                    )
+            else:
+                # Sin rango específico, usar todo el histórico
+                print(f"📅 Descargando TODOS los datos mensuales (period=max)")
+                
+                monthly_data = yf.Ticker(search_ticker).history(
+                    period="max",
+                    interval="1mo",
+                    auto_adjust=False
+                )
+                
+                if monthly_data.empty:
+                    monthly_data = yf.download(
+                        search_ticker,
+                        period="max",
+                        interval="1mo",
+                        auto_adjust=False,
+                        progress=False
+                    )
 
+            if not monthly_data.empty:
+                # Normalizar MultiIndex si existe
+                if isinstance(monthly_data.columns, pd.MultiIndex):
+                    try:
+                        if search_ticker in monthly_data.columns.get_level_values(1):
+                            monthly_data = monthly_data.xs(search_ticker, level=1, axis=1)
+                        else:
+                            monthly_data = monthly_data.droplevel(1, axis=1)
+                    except:
+                        pass
+
+                # CALCULAR RETORNO MENSUAL (EXACTAMENTE como mi script)
+                # Mi script: data['Monthly Return (%)'] = data['Close'].pct_change() * 100
+                monthly_data['Returns'] = monthly_data['Close'].pct_change()
+                monthly_data['Month'] = monthly_data.index.month
+                monthly_data['Year'] = monthly_data.index.year
+                
+                # ============================================
+                # ELIMINAR PRIMER MES (tiene NaN del pct_change)
+                # Esto es crítico porque el primer mes no tiene mes anterior
+                # ============================================
+                monthly_data = monthly_data.dropna(subset=['Returns'])
+                
+                # Si hay start_date, filtrar datos >= start_date
+                # (para eliminar el mes "extra" que descargamos)
+                if start_date:
+                    monthly_data = monthly_data[monthly_data.index >= start_date]
+                
+                # LOGGING PARA DEBUGGING
+                print(f"✓ Datos mensuales procesados: {len(monthly_data)} meses")
+                if len(monthly_data) > 0:
+                    print(f"  Rango: {monthly_data.index[0].strftime('%Y-%m-%d')} a {monthly_data.index[-1].strftime('%Y-%m-%d')}")
+                    first_three = dict(list(monthly_data['Returns'].head(3).items()))
+                    print(f"  Primeros 3 retornos: {first_three}")
+                
+                # HEATMAP: Año vs Mes (EXACTAMENTE como mi script)
+                # Mi script: pivot_table = data.pivot_table(values='Monthly Return (%)', index='Year', columns='Month')
+                monthly_heatmap = monthly_data.pivot(
+                    index='Year',
+                    columns='Month',
+                    values='Returns'
+                )
+                
+                # AVG MONTHLY: Promedio de retornos mensuales por mes
+                # Mi script: monthly_avg_returns = data.groupby('Month')['Monthly Return (%)'].mean()
+                avg_monthly_series = monthly_data.groupby('Month')['Returns'].mean()
+                avg_monthly_dict = avg_monthly_series.to_dict()
+                
+        except Exception as e:
+            print(f"❌ Error fetching monthly data for seasonality: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    # ========================================
+    # FALLBACK: Si no se pudieron obtener datos mensuales
+    # ========================================
+    if monthly_heatmap is None:
+        print("⚠️ Warning: Usando fallback con composición de retornos diarios")
+        
+        # HEATMAP: Componer retornos diarios por mes
+        monthly_returns = df.groupby(['Year', 'Month'])['Returns'].apply(
+            lambda x: (x + 1).prod() - 1
+        ).reset_index()
+        monthly_heatmap = monthly_returns.pivot(
+            index='Year',
+            columns='Month',
+            values='Returns'
+        )
+        
+        # AVG MONTHLY: Promedio de retornos mensuales compuestos
+        avg_monthly_series = monthly_returns.groupby('Month')['Returns'].mean()
+        avg_monthly_dict = avg_monthly_series.to_dict()
+    
+    # ========================================
+    # PARTE 2: AVG DAILY PERFORMANCE
+    # (Usando datos DIARIOS - esto está correcto)
+    # ========================================
+    avg_daily = df.groupby('DayOfWeek')['Returns'].mean() * 100  # En porcentaje
+    avg_daily_dict = avg_daily.to_dict()
+
+    # ========================================
+    # RETORNAR RESULTADOS
+    # ========================================
     return {
         "monthly_heatmap": json.loads(monthly_heatmap.fillna(0).to_json(orient="split")),
-        "avg_monthly": avg_monthly.to_dict(),
-        "avg_daily": avg_daily.to_dict()
+        "avg_monthly": avg_monthly_dict,  # Ahora usa retornos mensuales reales
+        "avg_daily": avg_daily_dict
     }
 
 def calculate_distribution(data):
@@ -131,17 +273,30 @@ def calculate_distribution(data):
 
 def calculate_drawdowns(data):
     """
-    Calculates top 5 worst drawdowns.
+    Calculates drawdown metrics including avg_drawdown, var_95, and sortino.
     """
-    cumulative = (1 + data['Close'].pct_change()).cumprod()
+    returns = data['Close'].pct_change().dropna()
+    cumulative = (1 + returns).cumprod()
     peak = cumulative.expanding(min_periods=1).max()
     drawdown = (cumulative / peak) - 1
     
-    # Identify drawdowns... this is a bit complex to get exact start/end dates for top 5 efficiently
-    # Simplified approach: just return the max drawdown series for the chart
+    # Average Drawdown (promedio de todos los drawdowns negativos)
+    avg_drawdown = drawdown[drawdown < 0].mean() if len(drawdown[drawdown < 0]) > 0 else 0
+    
+    # Value at Risk (95%) - pérdida máxima diaria esperada con 95% confianza
+    var_95 = returns.quantile(0.05)
+    
+    # Sortino Ratio - rendimiento ajustado por riesgo a la baja
+    annualized_return = returns.mean() * 252
+    downside_returns = returns[returns < 0]
+    downside_std = downside_returns.std() * np.sqrt(252)
+    sortino = annualized_return / downside_std if downside_std != 0 else 0
     
     return {
         "max_drawdown": drawdown.min(),
+        "avg_drawdown": avg_drawdown,
+        "var_95": var_95,
+        "sortino": sortino,
         "current_drawdown": drawdown.iloc[-1],
         "drawdown_series": json.loads(drawdown.to_json(orient="values"))
     }
