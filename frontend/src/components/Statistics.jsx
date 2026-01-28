@@ -41,15 +41,35 @@ const riskExplanations = {
         description: "La mayor caída porcentual desde un pico hasta un valle en el período.",
         calculation: "(Min - Pico) / Pico"
     },
+    currentDrawdown: {
+        title: "Current Drawdown",
+        description: "La caída actual desde el último pico máximo.",
+        calculation: "(Precio Actual - Pico) / Pico"
+    },
     avgDrawdown: {
         title: "Avg Drawdown",
         description: "La profundidad promedio de las caídas diarias durante períodos negativos.",
         calculation: "Promedio(Caídas Diarias < 0)"
     },
+    volatility: {
+        title: "Volatility (Volatilidad)",
+        description: "Mide cuánto varía el precio día a día. Alta volatilidad = mayor riesgo.",
+        calculation: "Desv. Estándar Anualizada × √252"
+    },
+    beta: {
+        title: "Beta",
+        description: "Mide la sensibilidad del activo respecto al mercado (SPY). Beta > 1 = más volátil que el mercado.",
+        calculation: "Cov(R_activo, R_SPY) / Var(R_SPY)"
+    },
     var95: {
         title: "Value at Risk (95%)",
         description: "La pérdida máxima diaria esperada con un 95% de confianza.",
         calculation: "Percentil 5 de retornos diarios"
+    },
+    sharpe: {
+        title: "Sharpe Ratio",
+        description: "Mide el rendimiento ajustado por riesgo total. Mayor a 1 es bueno.",
+        calculation: "(Retorno Anual - Tasa Libre 4%) / Volatilidad Anual"
     },
     sortino: {
         title: "Sortino Ratio",
@@ -324,6 +344,13 @@ const Statistics = ({ data }) => {
                         </div>
                         <div className="flex justify-between items-center border-b border-border pb-2">
                             <div className="flex items-center">
+                                <span className="text-muted-foreground">Current Drawdown</span>
+                                <MetricTooltip {...riskExplanations.currentDrawdown} />
+                            </div>
+                            <span className="font-bold text-red-400">{(drawdowns.current_drawdown * 100).toFixed(2)}%</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-border pb-2">
+                            <div className="flex items-center">
                                 <span className="text-muted-foreground">Avg Drawdown</span>
                                 <MetricTooltip {...riskExplanations.avgDrawdown} />
                             </div>
@@ -331,10 +358,31 @@ const Statistics = ({ data }) => {
                         </div>
                         <div className="flex justify-between items-center border-b border-border pb-2">
                             <div className="flex items-center">
+                                <span className="text-muted-foreground">Volatility</span>
+                                <MetricTooltip {...riskExplanations.volatility} />
+                            </div>
+                            <span className="font-bold text-yellow-400">{(drawdowns.volatility * 100).toFixed(2)}%</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-border pb-2">
+                            <div className="flex items-center">
+                                <span className="text-muted-foreground">Beta</span>
+                                <MetricTooltip {...riskExplanations.beta} />
+                            </div>
+                            <span className="font-mono">{drawdowns.beta?.toFixed(2) || 'N/A'}</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-border pb-2">
+                            <div className="flex items-center">
                                 <span className="text-muted-foreground">VaR (95%)</span>
                                 <MetricTooltip {...riskExplanations.var95} />
                             </div>
                             <span className="font-bold text-red-400">{(drawdowns.var_95 * 100).toFixed(2)}%</span>
+                        </div>
+                        <div className="flex justify-between items-center border-b border-border pb-2">
+                            <div className="flex items-center">
+                                <span className="text-muted-foreground">Sharpe Ratio</span>
+                                <MetricTooltip {...riskExplanations.sharpe} />
+                            </div>
+                            <span className="font-mono">{drawdowns.sharpe?.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between items-center border-b border-border pb-2">
                             <div className="flex items-center">

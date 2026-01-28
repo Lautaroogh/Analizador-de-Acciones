@@ -10,10 +10,7 @@ import StatsRangeSelector from './components/StatsRangeSelector';
 import { getTickerData } from './api';
 import { LayoutDashboard, TrendingUp, Activity } from 'lucide-react';
 import {
-    calculateTotalReturn,
-    calculateVolatility,
-    calculateSharpeRatio,
-    calculateMaxDrawdown
+    calculateTotalReturn
 } from './utils/finance';
 import {
     calculateMonthlyReturnsHeatmap,
@@ -169,10 +166,7 @@ function App() {
             const lastPrice = chartData[chartData.length - 1].close || chartData[chartData.length - 1].Close;
             const metrics = {
                 currentPrice: lastPrice,
-                totalReturn: calculateTotalReturn(chartData),
-                volatility: calculateVolatility(chartData),
-                sharpeRatio: calculateSharpeRatio(chartData),
-                maxDrawdown: calculateMaxDrawdown(chartData)
+                totalReturn: calculateTotalReturn(chartData)
             };
             setTopMetrics(metrics);
         }

@@ -78,26 +78,7 @@ const StatsGrid = ({ metrics, period = "MAX" }) => {
             unit: "%",
             color: true,
             key: "totalReturn"
-        },
-        {
-            label: `Volatility (${displayPeriod})`,
-            value: metrics.volatility?.toFixed(2),
-            unit: "%",
-            key: "volatility"
-        },
-        {
-            label: `Sharpe Ratio (${displayPeriod})`,
-            value: metrics.sharpeRatio?.toFixed(2),
-            unit: "",
-            key: "sharpe"
-        },
-        {
-            label: `Max Drawdown (${displayPeriod})`,
-            value: metrics.maxDrawdown?.toFixed(2),
-            unit: "%",
-            isNegative: true,
-            key: "maxDrawdown"
-        },
+        }
     ];
 
     const getColor = (value, isNegative = false) => {
@@ -113,7 +94,7 @@ const StatsGrid = ({ metrics, period = "MAX" }) => {
     };
 
     return (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+        <div className="grid grid-cols-2 gap-4 mb-6">
             {statsItems.map((metric, index) => (
                 <div key={index} className="bg-card border border-border p-4 rounded-lg">
                     <div className="text-sm text-muted-foreground mb-1 flex items-center">

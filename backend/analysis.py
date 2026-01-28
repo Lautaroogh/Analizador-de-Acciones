@@ -273,7 +273,7 @@ def calculate_distribution(data):
 
 def calculate_drawdowns(data):
     """
-    Calculates drawdown metrics including avg_drawdown, var_95, and sortino.
+    Calculates drawdown metrics including avg_drawdown, var_95, sharpe, sortino, volatility, and beta.
     """
     returns = data['Close'].pct_change().dropna()
     cumulative = (1 + returns).cumprod()
@@ -286,8 +286,36 @@ def calculate_drawdowns(data):
     # Value at Risk (95%) - pérdida máxima diaria esperada con 95% confianza
     var_95 = returns.quantile(0.05)
     
-    # Sortino Ratio - rendimiento ajustado por riesgo a la baja
+    # Volatility - Desviación estándar anualizada
+    volatility = returns.std() * np.sqrt(252)
+    
+    # Beta - Correlación con SPY (mercado)
+    beta = None
+    try:
+        spy_data = yf.Ticker("SPY").history(
+            start=data.index[0].strftime('%Y-%m-%d'),
+            end=data.index[-1].strftime('%Y-%m-%d'),
+            interval="1d"
+        )
+        if not spy_data.empty and len(spy_data) > 1:
+            spy_returns = spy_data['Close'].pct_change().dropna()
+            # Alinear fechas
+            aligned_returns = returns.align(spy_returns, join='inner')
+            if len(aligned_returns[0]) > 1:
+                covariance = aligned_returns[0].cov(aligned_returns[1])
+                spy_variance = aligned_returns[1].var()
+                beta = covariance / spy_variance if spy_variance != 0 else None
+    except Exception as e:
+        print(f"Error calculating beta: {e}")
+        beta = None
+    
+    # Sharpe Ratio - rendimiento ajustado por riesgo total
     annualized_return = returns.mean() * 252
+    annualized_volatility = volatility
+    risk_free_rate = 0.04  # 4% anual
+    sharpe = (annualized_return - risk_free_rate) / annualized_volatility if annualized_volatility != 0 else 0
+    
+    # Sortino Ratio - rendimiento ajustado por riesgo a la baja
     downside_returns = returns[returns < 0]
     downside_std = downside_returns.std() * np.sqrt(252)
     sortino = annualized_return / downside_std if downside_std != 0 else 0
@@ -295,7 +323,10 @@ def calculate_drawdowns(data):
     return {
         "max_drawdown": drawdown.min(),
         "avg_drawdown": avg_drawdown,
+        "volatility": volatility,
+        "beta": beta,
         "var_95": var_95,
+        "sharpe": sharpe,
         "sortino": sortino,
         "current_drawdown": drawdown.iloc[-1],
         "drawdown_series": json.loads(drawdown.to_json(orient="values"))
