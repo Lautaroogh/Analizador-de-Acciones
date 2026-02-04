@@ -1,3 +1,32 @@
+import os
+import shutil
+import tempfile
+import certifi
+
+# === SSL CERTIFICATE FIX FOR WINDOWS & NON-ASCII PATHS ===
+# The path to certifi's cacert.pem might contain non-ASCII characters (e.g., "Programación"),
+# which can cause curl/requests to fail on Windows.
+# We copy the certificate to a temporary, clean path and point environment variables to it.
+
+try:
+    original_cert_path = certifi.where()
+    # Create a temp file for the cert
+    temp_dir = tempfile.gettempdir()
+    safe_cert_path = os.path.join(temp_dir, "cacert_fix.pem")
+    
+    # Copy file if it doesn't exist or just overwrite to be safe
+    shutil.copy2(original_cert_path, safe_cert_path)
+    
+    # Set environment variables for requests/curl_cffi/yfinance
+    os.environ['SSD_CERT_FILE'] = safe_cert_path
+    os.environ['REQUESTS_CA_BUNDLE'] = safe_cert_path
+    os.environ['CURL_CA_BUNDLE'] = safe_cert_path
+    
+    print(f"✅ SSL Cert fixed: Pointing to {safe_cert_path}")
+except Exception as e:
+    print(f"⚠️ SSL Cert fix failed: {e}")
+# ========================================================
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn

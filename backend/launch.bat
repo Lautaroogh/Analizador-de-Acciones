@@ -1,9 +1,12 @@
 @echo off
 TITLE FinAnalyzer Backend
+chcp 65001 >nul
 
-if not exist venv\Scripts\activate.bat (
+cd /d "%~dp0"
+
+if not exist "venv\Scripts\activate.bat" (
     echo.
-    echo [ERROR] Virtual environment not found in "backend/venv".
+    echo [ERROR] Virtual environment not found in "%~dp0venv".
     echo Please make sure you have set up the python environment.
     echo.
     pause
@@ -11,7 +14,7 @@ if not exist venv\Scripts\activate.bat (
 )
 
 echo Activating virtual environment...
-call venv\Scripts\activate.bat
+call "venv\Scripts\activate.bat"
 
 echo Starting server...
 python -m uvicorn main:app --reload --port 8000
