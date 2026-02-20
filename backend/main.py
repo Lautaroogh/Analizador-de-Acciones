@@ -52,7 +52,7 @@ app = FastAPI(
 # CORS Configuration
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://finanalyzer.guardianolautaro.com"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
